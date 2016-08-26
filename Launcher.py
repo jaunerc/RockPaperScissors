@@ -8,13 +8,16 @@ def launch():
     print 'Welcome'
     print 'Please type s to start'
 
-    res = Game.init()
+    player, srv_addr = Game.init()
 
-    Game.connect(res[0], res[1])
+    Game.connect(player, srv_addr)
 
-    Game.share_graphs(res[0])
+    Game.share_graphs(player)
 
-    Game.play(res[0])
+    is_over = Game.play(player)
+    while not is_over:
+        print 'It is a draw'
+        is_over = Game.play(player)
 
     raw_input()
 

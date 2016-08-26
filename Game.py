@@ -21,6 +21,12 @@ REQ_STRING = 0
 #
 REQ_INTEGER = 1
 
+RES_WIN = 1
+
+RES_LOOSE = 0
+
+RES_DRAW = -1
+
 
 class Player:
     """
@@ -192,9 +198,10 @@ def share_graphs(player):
     srv_req = player.receive()
     if srv_req is not None:
 
-        # This player has to generate graphs
-        # Each graph is sent to the server
         if srv_req == RPSNetwork.GRAPHS_NEED:
+            # This player has to generate graphs
+            # Each graph is sent to the server
+
             print 'Generate graphs...'
 
             for i in range(0, GRAPH_NUMBERS):
@@ -205,12 +212,14 @@ def share_graphs(player):
             print 'All graphs sent'
             success = True
 
-        # This player receives graphs
         elif srv_req == RPSNetwork.GRAPHS_SEND_START:
+            # This player receives graphs
+
             srv_req = player.receive()
 
-            # Receive graphs until the end request is received
             while srv_req != RPSNetwork.GRAPHS_SEND_END:
+                # Receive graphs until the end request is received
+
                 player.load_graph(srv_req)
                 srv_req = player.receive()
 
@@ -222,25 +231,40 @@ def share_graphs(player):
     return success
 
 
-def normal_turn(player):
-    print 'Your turn. Choose an integer in the range 0 to ' + str(len(player.graphs) - 1)
+def ask_for_graph(player):
+    """
+    Lets the user choose a graph. This function checks the user input.
+    As long as the input is not valid, the function asks for a new value.
+    :param player: The player object.
+    :return: The chosen index.
+    """
+    print 'Your turn. Choose an integer in the range 0 to 2'
+    print 'The values stands for: 0-Rock, 1-Paper, 2-Scissor'
     i = input_handler(REQ_INTEGER, 'Choice:')
-    return player.get_graph(i)
+    while i is None:
+        print 'The input was not correct. Try again!'
+        i = input_handler(REQ_INTEGER, 'Choice:')
+
+    print "You're choice " + ['Rock', 'Paper', 'Scissor'][i]
+    return i
 
 
-def isomorph_turn(player):
-    g = normal_turn(player)
-    print 'not isomorphic: '
-    print g.edges
-    iso = g.isomorphic_copy()
-    print 'isomorphic'
-    print (iso[0]).edges
-    return iso
+def ask_for_isomorphic_graph(player):
+    """
+    Lets the user choose a graph and returns a random isomorphic copy.
+    :param player: The player object.
+    :return: The graph object, The isomorphism.
+    """
+    return (ask_for_graph(player)).isomorphic_copy()
 
 
 def oppon_turn(player):
-    req = player.receive()
-    return pickle.loads(req)
+    """
+    Receives a request of the opponent and loads it with pickle.
+    :param player: The player object.
+    :return: The pickle load result of the request.
+    """
+    return pickle.loads(player.receive())
 
 
 def get_graph_index(player, g):
@@ -251,26 +275,26 @@ def get_graph_index(player, g):
 
 
 def calc_result(my_i, op_i):
-    my_win = False
+    res = RES_LOOSE
     if my_i != op_i:
         if my_i == 0:
             # Rock
             if op_i == 2:
                 # Opponent choose scissor
-                my_win = True
+                res = RES_WIN
         elif my_i == 1:
             # Paper
             if op_i == 0:
                 # Opponent choose rock
-                my_win = True
+                res = RES_WIN
         elif my_i == 2:
             # Scissor
             if op_i == 1:
                 # Opponent choose paper
-                my_win = True
+                res = RES_WIN
     else:
-        print "It's a draw"
-    return my_win
+        res = RES_DRAW
+    return res
 
 
 def check_graphs(player, my_graph, op_graph):
@@ -295,48 +319,54 @@ def play(player):
     :return:
     """
     srv_req = player.receive()
+    is_over = False
+    game_result = None
     if srv_req == RPSNetwork.TURN_NEED:
-        iso = isomorph_turn(player)
-        dmp = pickle.dumps(iso[0])
-        player.send(dmp)
-        print 'I choose:'
-        print (iso[0]).edges
 
+        # Asks for rock, paper or scissor.
+        choice = ask_for_graph(player)
+        my_g = player.get_graph(choice)
+
+        # A isomorphic copy of the chosen graph will be sent to the opponent.
+        my_iso_g, iso = my_g.isomorphic_copy()
+        dmp = pickle.dumps(my_iso_g)
+        player.send(dmp)
+
+        # Receives the opponents chosen graph.
         op_g = oppon_turn(player)
-        print 'The opponents choice'
-        print op_g.edges
 
-        dmp = pickle.dumps(iso[1])
-        player.send(dmp)
-        print 'Sent the isomorphism'
+        # Send the isomorphism
+        player.send(pickle.dumps(iso))
 
-        print 'Compare graphs'
-        inv_func = Graphs.inv_permut_function(iso[1])
-        my_edges = Graphs.apply_isomorphism(iso[0].edges, inv_func)
-        my_g = Graphs.Graph(my_edges)
-
+        # Check if the game is over and determine the winner.
         game_result = check_graphs(player, my_g, op_g)
         print 'The result is '+str(game_result)
 
     elif srv_req == RPSNetwork.TURN_SEND:
+
+        # Receives the opponents chosen graph.
         op_g = oppon_turn(player)
-        print 'The opponents choice isomorphic'
-        print op_g.edges
 
-        g = normal_turn(player)
-        dmp = pickle.dumps(g)
+        # Asks for rock, paper or scissor.
+        my_g = player.get_graph(ask_for_graph(player))
+        dmp = pickle.dumps(my_g)
         player.send(dmp)
-        print 'I choose:'
-        print g.edges
 
+        # Receives the opponents isomorphism
         op_iso = oppon_turn(player)
-        print 'The isomorphism is'
-        print op_iso
 
+        # Calculates the opponents graph back.
         inv_func = Graphs.inv_permut_function(op_iso)
         op_edges = Graphs.apply_isomorphism(op_g.edges, inv_func)
         op_g = Graphs.Graph(op_edges)
 
-        game_result = check_graphs(player, g, op_g)
+        # Check if the game is over and determine the winner.
+        game_result = check_graphs(player, my_g, op_g)
         print 'The result is ' + str(game_result)
 
+    if game_result != -1:
+        is_over = True
+
+    player.send(str(game_result))
+
+    return is_over

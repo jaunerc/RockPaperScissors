@@ -340,6 +340,13 @@ def turn(p1, p2):
     t3 = recv_msg(p1)
     send_msg(p2, t3)
 
+    res_p1 = int(recv_msg(p1))
+    res_p2 = int(recv_msg(p2))
+
+    if res_p1 == res_p2:
+        if res_p1 == -1:
+            return False
+
     return True
 
 
@@ -370,4 +377,8 @@ class RPSProtocol:
         elif self.index == 2:
             return share_graphs(p1, p2)
         else:
-            return turn(p1, p2)
+            if turn(p1, p2):
+                return True
+            else:
+                self.index -= 1
+                return False

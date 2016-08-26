@@ -83,8 +83,8 @@ class Graph:
 
     def isomorphic_copy(self):
         """
-
-        :return:
+        Creates a random graph, that is isomorphic to self.
+        :return: The isomorphic graph, The isomorphism.
         """
         L = list(range(self.num_vertices()))
         random.shuffle(L)
