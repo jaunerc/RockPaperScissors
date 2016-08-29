@@ -39,6 +39,16 @@ TURN_NEED = 'NEED_TURN'
 #
 TURN_SEND = 'SEND_TURN'
 
+#
+# Request of a client when he want's a regame.
+#
+PLAY_AGAIN_TRUE = 'PL_TRUE'
+
+#
+# Request of a client when he don't want to play again.
+#
+PLAY_AGAIN_FALSE = 'PL_FALSE'
+
 
 #
 # Helper functions
@@ -326,14 +336,14 @@ def share_graphs(p1, p2):
 
 def turn(p1, p2):
     """
-    Third protocol step. this function handles a turn.
+    Third protocol step. This function handles a turn.
     :param p1: Socket of player 1.
     :param p2: Socket of player 2.
-    :return:
+    :return: Whether the game is over or not.
     """
     send_msg(p1, TURN_NEED)
-    t1 = recv_msg(p1)
     send_msg(p2, TURN_SEND)
+    t1 = recv_msg(p1)
     send_msg(p2, t1)
     t2 = recv_msg(p2)
     send_msg(p1, t2)
@@ -344,10 +354,22 @@ def turn(p1, p2):
     res_p2 = int(recv_msg(p2))
 
     if res_p1 == res_p2:
+        # If the results aren't equals, the game will be interrupted
+
         if res_p1 == -1:
             return False
 
     return True
+
+
+def play_again(p1, p2):
+    p1_again = recv_msg(p1)
+    p2_again = recv_msg(p2)
+
+    send_msg(p1, p2_again)
+    send_msg(p2, p1_again)
+
+    return p1_again == PLAY_AGAIN_TRUE and p2_again == PLAY_AGAIN_TRUE
 
 
 class RPSProtocol:
@@ -374,11 +396,23 @@ class RPSProtocol:
 
         if self.index == 1:
             return prepare(p1, p2)
+
         elif self.index == 2:
             return share_graphs(p1, p2)
-        else:
+
+        elif self.index == 3:
             if turn(p1, p2):
-                return True
+                # The game is over
+
+                return False
             else:
+                # It's a draw. The game needs a new turn
                 self.index -= 1
                 return False
+
+        elif self.index == 4:
+            if play_again(p1, p2):
+                self.index = 2
+                return False
+            else:
+                return True

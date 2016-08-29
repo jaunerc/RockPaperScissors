@@ -21,10 +21,24 @@ REQ_STRING = 0
 #
 REQ_INTEGER = 1
 
+#
+# Flag for the input_handler function. Indicates that the input should be a valid port number.
+#
+REQ_PORT = 2
+
+#
+# The game result for winning.
+#
 RES_WIN = 1
 
+#
+# The game result for loosing.
+#
 RES_LOOSE = 0
 
+#
+# The game result for a draw.
+#
 RES_DRAW = -1
 
 
@@ -104,6 +118,26 @@ class Player:
         else:
             return None
 
+    def get_graph_index(self, g):
+        """
+        Returns the index of the given graph in the self.graphs list.
+        :param g: The graph to find the index of.
+        :return: The index of the graph or -1 if the graph is not found.
+        """
+        for i in range(0, len(self.graphs)):
+            if (self.graphs[i]).edges == g.edges:
+                return i
+        return -1
+
+
+def separator(num_lines):
+    """
+    Prints a string of *-signs to the console.
+    :param num_lines: The number of lines to print out.
+    """
+    for i in range(0, num_lines):
+        print '******************************************'
+
 
 def input_handler(req=REQ_STRING, prompt=''):
     """
@@ -115,10 +149,16 @@ def input_handler(req=REQ_STRING, prompt=''):
     inp = None
     if req == REQ_STRING:
         inp = raw_input(prompt)
+
     elif req == REQ_INTEGER:
         try:
             inp = int(raw_input(prompt))
         except ValueError:
+            inp = None
+
+    elif req == REQ_PORT:
+        inp = input_handler(REQ_INTEGER, prompt)
+        if inp is None or inp < 0 or inp > 65535:
             inp = None
 
     return inp
@@ -146,36 +186,57 @@ def init():
     player.client = RPSNetwork.RPSClient()
 
     # Asks for the server port.
-    print 'Type the server port to start broadcast'
-    inp = input_handler(REQ_INTEGER, 'Port number:')
+    print 'Type the servers port'
+    inp = input_handler(REQ_PORT, 'Port number:')
+    while inp is None:
+        print "Your input is not valid..."
+        inp = input_handler(REQ_INTEGER, 'Port number:')
 
-    # Discover the network for a RPS server.
+    # Discovers the network for a RPS server.
     srv_addr = player.look_for_server(inp)
 
-    # Start own server if no server can be found.
+    # Starts own server if no server can be found.
     if srv_addr is None:
-        print 'No RPS Server found, start own server'
+        print 'No RPS Server found, try to start a new server'
         print 'On which port should your server listen?'
 
-        inp = input_handler(REQ_INTEGER, 'Port number:')
+        # Waits for a valid port number
+        inp = input_handler(REQ_PORT, 'Port number:')
+        while inp is None:
+            print "Your input is not valid..."
+            inp = input_handler(REQ_INTEGER, 'Port number:')
+
+        # Creates a new RPSServer
         server = RPSNetwork.RPSServer()
+        # Starts new server threads
         start_new_thread(server.start, (inp, inp))
+
+        # Wait for the server startup
         time.sleep(2)
+
         if not server.running:
             print 'Unable to start server'
             sys.exit(0)
         else:
             srv_addr = ('localhost', inp)
 
+    separator(1)
+
     return player, srv_addr
 
 
 def connect(player, srv_addr):
+    """
+    Connects the given player to the given server address.
+    :param player: The player object.
+    :param srv_addr: Server address, port tuple.
+    """
+
     # Connects this player with the server and send the player name.
     player.connect(srv_addr)
     player.send(player.name)
 
-    print 'The RPS Server is running'
+    print 'Successfully connected with '+str(srv_addr[0])
     print 'Wait for other players'
 
     # Waits for the opponent
@@ -190,6 +251,9 @@ def share_graphs(player):
     :param player: The player object.
     :return: Whether the sharing was successfully or not.
     """
+
+    separator(1)
+
     success = False
 
     # Waits for the server response. There are two possible cases
@@ -205,7 +269,8 @@ def share_graphs(player):
             print 'Generate graphs...'
 
             for i in range(0, GRAPH_NUMBERS):
-                g = Graphs.random_graph(10, 2)
+                # Creates new random graphs
+                g = Graphs.random_graph(100, 2)
                 player.add_graph(g)
                 player.send_graph(i)
 
@@ -228,6 +293,9 @@ def share_graphs(player):
 
     else:
         print 'The server is not accessible'
+
+    separator(1)
+
     return success
 
 
@@ -238,6 +306,7 @@ def ask_for_graph(player):
     :param player: The player object.
     :return: The chosen index.
     """
+
     print 'Your turn. Choose an integer in the range 0 to 2'
     print 'The values stands for: 0-Rock, 1-Paper, 2-Scissor'
     i = input_handler(REQ_INTEGER, 'Choice:')
@@ -246,6 +315,9 @@ def ask_for_graph(player):
         i = input_handler(REQ_INTEGER, 'Choice:')
 
     print "You're choice " + ['Rock', 'Paper', 'Scissor'][i]
+
+    separator(1)
+
     return i
 
 
@@ -264,52 +336,79 @@ def oppon_turn(player):
     :param player: The player object.
     :return: The pickle load result of the request.
     """
+    print 'Wait for opponents turn...'
     return pickle.loads(player.receive())
 
 
-def get_graph_index(player, g):
-    for i in range(0, len(player.graphs)):
-        if (player.graphs[i]).edges == g.edges:
-            return i
-    return -1
-
-
 def calc_result(my_i, op_i):
+    """
+    Calculates the game result. Player 1 must be the own player object and player 2 the opponent.
+    There are three possible results:
+    - Player 1 has won
+    - Player 2 has won
+    - It's a draw
+    The RES_ constants represents the three results.
+
+    :param my_i: The graph index of player 1
+    :param op_i: The graph index of player 2
+    :return: The game result.
+    """
     res = RES_LOOSE
+    op_choice_txt = ""
     if my_i != op_i:
         if my_i == 0:
-            # Rock
+            # My choice was rock
+
             if op_i == 2:
                 # Opponent choose scissor
+
+                op_choice_txt = 'Scissor'
                 res = RES_WIN
         elif my_i == 1:
-            # Paper
+            # My choice was paper
+
             if op_i == 0:
                 # Opponent choose rock
+
+                op_choice_txt = 'Rock'
                 res = RES_WIN
         elif my_i == 2:
-            # Scissor
+            # My choice was scissor
+
             if op_i == 1:
                 # Opponent choose paper
+
+                op_choice_txt = 'Paper'
                 res = RES_WIN
     else:
         res = RES_DRAW
+
+    print 'The opponent choose '+op_choice_txt
+
     return res
 
 
-def check_graphs(player, my_graph, op_graph):
-    res = False
+def finish_turn(player, my_i, op_graph):
+    """
+    Finish the current turn.
+    :param player: The player object. If the given graph is not valid, the game will be exited.
+    :param op_graph: The graph object of the opponent.
+    """
+    op_i = player.get_graph_index(op_graph)
 
-    print 'My_Graph: '+str(my_graph.edges)
-    print 'Op_Graph: '+str(op_graph.edges)
-
-    my_i = get_graph_index(player, my_graph)
-    op_i = get_graph_index(player, op_graph)
-
-    if my_i != -1 and op_i != -1:
-        return calc_result(my_i, op_i)
+    if op_i == -1:
+        print 'The received graph is not correct. The game is exited.'
+        sys.exit(1)
     else:
-        print 'there was a problem'
+        game_result = calc_result(my_i, op_i)
+        if game_result == RES_WIN:
+            print 'You won!'
+        elif game_result == RES_LOOSE:
+            print 'You loose...'
+        elif game_result == RES_DRAW:
+            print "It's a draw"
+
+    return game_result
 
 
 def play(player):
@@ -339,8 +438,7 @@ def play(player):
         player.send(pickle.dumps(iso))
 
         # Check if the game is over and determine the winner.
-        game_result = check_graphs(player, my_g, op_g)
-        print 'The result is '+str(game_result)
+        game_result = finish_turn(player, choice, op_g)
 
     elif srv_req == RPSNetwork.TURN_SEND:
 
@@ -348,7 +446,8 @@ def play(player):
         op_g = oppon_turn(player)
 
         # Asks for rock, paper or scissor.
-        my_g = player.get_graph(ask_for_graph(player))
+        choice = ask_for_graph(player)
+        my_g = player.get_graph(choice)
         dmp = pickle.dumps(my_g)
         player.send(dmp)
 
@@ -361,12 +460,35 @@ def play(player):
         op_g = Graphs.Graph(op_edges)
 
         # Check if the game is over and determine the winner.
-        game_result = check_graphs(player, my_g, op_g)
-        print 'The result is ' + str(game_result)
+        game_result = finish_turn(player, choice, op_g)
 
-    if game_result != -1:
+    if game_result != RES_DRAW:
         is_over = True
 
     player.send(str(game_result))
 
     return is_over
+
+
+def play_again(player):
+    """
+    Handles a regame. Asks the given player if he want to play again.
+    After that, it waits for the opponents answer.
+    :param player: The player object.
+    :return: True, if both players wants to play again.
+    """
+    print 'Type a to play again'
+    again = input_handler(REQ_STRING, 'input: ')
+
+    if again == 'a':
+        player.send(RPSNetwork.PLAY_AGAIN_TRUE)
+
+        print 'Wait for the opponents response'
+        op_answer = player.receive()
+
+        if op_answer == RPSNetwork.PLAY_AGAIN_TRUE:
+            return True
+    else:
+        player.send(RPSNetwork.PLAY_AGAIN_FALSE)
+
+    return False

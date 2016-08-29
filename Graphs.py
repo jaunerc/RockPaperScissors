@@ -256,6 +256,6 @@ def random_graph(vertices, degree):
     """
     M = random_adjacency_mat(vertices, degree)
     edges = edges_from_adjacency_mat(M)
-    print ('The resulted graph has '+str(vertices)+' vertices and '+str(len(edges))+' edges.')
+    #print ('The resulted graph has '+str(vertices)+' vertices and '+str(len(edges))+' edges.')
     return Graph(edges)
 
