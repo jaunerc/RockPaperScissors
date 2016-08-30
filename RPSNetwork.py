@@ -174,8 +174,9 @@ class RPSServer:
                     conn.close()
                     out('rps is already running')
 
-                # If both players are connected, start the game
                 if gt is None and self.p1 is not None and self.p2 is not None:
+                    # If both players are connected, start the game
+
                     gt = RPSThread(self.p1, self.p2)
                     gt.start()
 
@@ -201,8 +202,8 @@ class RPSThread(threading.Thread):
 
         out('New rps game started')
 
-        # Loop to process the protocol.
         while not is_over:
+            # Loop to process the protocol.
             is_over = proto.next_step(self.p1, self.p2)
 
         out('The current rps is over')
@@ -247,8 +248,8 @@ class RPSClient:
         # Close the diagram socket.
         s.close()
 
-        # Saves the address if the server answer was correct.
         if answ is not None and answ[0] == ANS_HELLO:
+            # Saves the address if the server answer was correct.
             addr = answ[1]
         return addr
 
@@ -277,7 +278,11 @@ class RPSClient:
         :param msg: String message to send.
         """
         if self.sock is not None:
-            send_msg(self.sock, msg)
+            try:
+                send_msg(self.sock, msg)
+            except socket.error, msg:
+                self.sock = None
+                print 'Send failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
 
     def receive(self):
         """
@@ -363,6 +368,12 @@ def turn(p1, p2):
 
 
 def play_again(p1, p2):
+    """
+    Fourth protocol step. This function handles a regame.
+    :param p1: Socket of player 1.
+    :param p2: Socket of player 2.
+    :return: Whether both players wants to play again or not.
+    """
     p1_again = recv_msg(p1)
     p2_again = recv_msg(p2)
 
