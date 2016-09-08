@@ -16,7 +16,7 @@ That's because determining whether two graphs are isomorphic is very hard
 That was the initial idea of this project.
 
 ## Requirements
-This application is written in Python 2 and tested with Python 2.7.3. It uses the standard python module pickle for the network communication.
+This application is written in Python 2 and tested with Python 2.7.3.
 
 ## License
 All files are published under the MIT license.
